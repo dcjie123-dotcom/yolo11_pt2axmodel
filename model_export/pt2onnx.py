@@ -13,7 +13,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export YOLO .pt files to ONNX.")
     parser.add_argument("--pt-glob", default="model_export/data_need/*.pt")
     parser.add_argument("--out-dir", default="model_export/build/onnx")
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument(
+        "--imgsz",
+        type=int,
+        nargs="+",
+        default=[640],
+        help="Export image size. Use one value for square input, or two values as height width.",
+    )
     parser.add_argument("--opset", type=int, default=12)
     parser.add_argument("--dynamic", action="store_true")
     parser.add_argument("--no-simplify", action="store_true")
@@ -22,6 +28,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if len(args.imgsz) not in (1, 2):
+        raise SystemExit("--imgsz expects one value, or two values as height width")
+    imgsz = args.imgsz[0] if len(args.imgsz) == 1 else args.imgsz
+
     pt_paths = [Path(path) for path in glob.glob(args.pt_glob)]
     if not pt_paths:
         raise SystemExit(f"No .pt files matched: {args.pt_glob}")
@@ -36,7 +46,7 @@ def main() -> None:
         model = YOLO(str(pt_path))
         exported = model.export(
             format="onnx",
-            imgsz=args.imgsz,
+            imgsz=imgsz,
             opset=args.opset,
             simplify=not args.no_simplify,
             dynamic=args.dynamic,

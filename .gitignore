@@ -1,0 +1,6 @@
+model_export/*.tar
+model_export/*.tar.gz
+model_export/*.tgz
+model_export/build/
+__pycache__/
+*.pyc

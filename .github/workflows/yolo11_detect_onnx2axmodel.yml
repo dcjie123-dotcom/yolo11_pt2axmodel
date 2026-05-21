@@ -16,7 +16,7 @@ on:
         required: true
         default: "yolo11_detect"
       image_size:
-        description: "YOLO export image size"
+        description: "YOLO export image size. Use 640 or height width, for example 384 640"
         required: true
         default: "640"
       opset:
@@ -44,7 +44,7 @@ on:
         required: true
         default: "pulsar2:latest"
       pulsar2_tar_url:
-        description: "Optional URL to a docker-save Pulsar2 tar/tar.gz file"
+        description: "model_export/data_need/pulsar2_image.tar.gz"
         required: false
         default: ""
 
