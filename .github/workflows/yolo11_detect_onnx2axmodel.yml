@@ -6,7 +6,7 @@ on:
       pt_glob:
         description: "PT files to export"
         required: true
-        default: "model_export/data_need/*.pt"
+        default: "model_export/data_need/best.pt"
       calib_images_dir:
         description: "Calibration images directory"
         required: true
@@ -18,7 +18,7 @@ on:
       image_size:
         description: "YOLO export image size. Use 640 or height width, for example 384 640"
         required: true
-        default: "640"
+        default: "480 640"
       opset:
         description: "ONNX opset"
         required: true
