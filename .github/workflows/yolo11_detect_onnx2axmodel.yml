@@ -42,11 +42,11 @@ on:
       pulsar2_image:
         description: "Docker image containing pulsar2 and onnxsim"
         required: true
-        default: "pulsar2:latest"
+        default: "pulsar2:6.0"
       pulsar2_tar_url:
-        description: "model_export/data_need/pulsar2_image.tar.gz"
+        description: "Pulsar2 docker image tar.gz URL"
         required: false
-        default: ""
+        default: "https://huggingface.co/AXERA-TECH/Pulsar2/resolve/main/6.0/ax_pulsar2_6.0.tar.gz?download=true"
 
 jobs:
   pt2onnx:
