@@ -125,15 +125,28 @@ jobs:
           name: yolo11-labels
           path: model_export/build
 
+      - name: Create Pulsar2 cache directory
+        run: mkdir -p .cache/pulsar2
+
+      - name: Restore Pulsar2 image cache
+        id: pulsar2-cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pulsar2/ax_pulsar2_6.0.tar.gz
+          key: pulsar2-image-6.0
+
       - name: Prepare Pulsar2 docker image
         env:
           PULSAR2_IMAGE: ${{ inputs.pulsar2_image }}
           PULSAR2_TAR_URL: ${{ inputs.pulsar2_tar_url }}
         run: |
           set -euo pipefail
+          PULSAR2_TAR=".cache/pulsar2/ax_pulsar2_6.0.tar.gz"
           if [ -n "$PULSAR2_TAR_URL" ]; then
-            curl -L "$PULSAR2_TAR_URL" -o pulsar2_image.tar.gz
-            docker load -i pulsar2_image.tar.gz
+            if [ ! -s "$PULSAR2_TAR" ]; then
+              curl -L "$PULSAR2_TAR_URL" -o "$PULSAR2_TAR"
+            fi
+            docker load -i "$PULSAR2_TAR"
           fi
           docker image inspect "$PULSAR2_IMAGE" >/dev/null 2>&1 || docker pull "$PULSAR2_IMAGE"
 
@@ -151,7 +164,10 @@ jobs:
             -v "$PWD:/workspace" \
             -w /workspace \
             "$PULSAR2_IMAGE" \
-            -lc "python -m pip install --upgrade pip && \
+            -lc "export PATH=/usr/local/bin/.venv/bin:/root/.local/bin:/opt/pulsar2/bin:\$PATH && \
+              command -v pulsar2 && \
+              pulsar2 version && \
+              python -m pip install --upgrade pip && \
               python -m pip install onnx onnxsim && \
               python model_export/onnx2axmodel.py \
               --onnx '/workspace/$ONNX_PATH' \
