@@ -67,11 +67,14 @@ jobs:
           python -m pip install ultralytics onnx onnxsim
 
       - name: Export PT to ONNX
+        env:
+          IMAGE_SIZE: ${{ inputs.image_size }}
         run: |
+          read -r -a IMAGE_SIZE_ARGS <<< "$IMAGE_SIZE"
           python model_export/pt2onnx.py \
             --pt-glob "${{ inputs.pt_glob }}" \
             --out-dir model_export/build/onnx \
-            --imgsz "${{ inputs.image_size }}" \
+            --imgsz "${IMAGE_SIZE_ARGS[@]}" \
             --opset "${{ inputs.opset }}"
 
       - name: Upload ONNX artifact
