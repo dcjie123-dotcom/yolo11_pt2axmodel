@@ -164,7 +164,18 @@ jobs:
             -v "$PWD:/workspace" \
             -w /workspace \
             "$PULSAR2_IMAGE" \
-            -lc "export PATH=/usr/local/bin/.venv/bin:/root/.local/bin:/opt/pulsar2/bin:\$PATH && \
+            -lc "set -euo pipefail && \
+              [ -f /etc/profile ] && source /etc/profile || true && \
+              [ -f ~/.bashrc ] && source ~/.bashrc || true && \
+              export PATH=/usr/local/bin/.venv/bin:/root/.local/bin:/opt/pulsar2/bin:\$PATH && \
+              if ! command -v pulsar2 >/dev/null 2>&1; then \
+                PULSAR2_BIN=\$(find / -type f -name pulsar2 -perm /111 2>/dev/null | head -n 1); \
+                if [ -z \"\$PULSAR2_BIN\" ]; then \
+                  echo 'pulsar2 command not found in container'; \
+                  exit 1; \
+                fi; \
+                export PATH=\"\$(dirname \"\$PULSAR2_BIN\"):\$PATH\"; \
+              fi && \
               command -v pulsar2 && \
               pulsar2 version && \
               python -m pip install --upgrade pip && \
