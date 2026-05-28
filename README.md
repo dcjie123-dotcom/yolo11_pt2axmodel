@@ -13,7 +13,7 @@
 注意：需要使用能导出上述节点的 Ultralytics 环境。当前 workflow 固定使用 `ultralytics==8.3.39`、`torch==2.5.1`，避免新版 PyTorch ONNX exporter 改变 graph 结构。
 ## 实测建议
 
-其实建议直接使用yolo26 按照Sipeed的教程转换 我现阶段还没有尝试yolo26的部署 
+1.其实建议直接使用yolo26 按照Sipeed的教程转换 我现阶段还没有尝试yolo26的部署 
 
 但是他文档有关yolo11的转换流程都是根据他写文档时ultralytics，torch，onnx等依赖的版本编写的
 
@@ -21,6 +21,9 @@
 
 这导致最新的依赖中如果按照教程的三个concat节点转换会出问题 因为这三个concat前经过了一个reshape导致四通道变为三通道
 
+2.本仓库是通过github action完成转换的 由于没有gpu且为云端资源 转换时间大致为15min左右
+
+还是建议本地开一个Linux进行转换
 
 ## 目录结构
 
