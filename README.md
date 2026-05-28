@@ -1,138 +1,8 @@
-# YOLO11 Detect 转 MaixCAM2 AXModel 使用说明（未完成 最近懒得搞）
+# YOLO11 Detect 转 MaixCAM2 AXModel
 
-这个仓库提供了一套 GitHub Actions workflow，用来把 YOLO11 检测模型的 `.pt` 文件转换成 MaixCAM2 可用的 `.axmodel` 文件。
+这个仓库用于把 YOLO11 检测模型 `.pt` 转成 MaixCAM2 可用的 `.axmodel` 和 `.mud`。
 
-整个流程分成两个 job：
-
-1. `pt2onnx`：把 `model_export/data_need` 目录下的 `.pt` 模型导出成 ONNX。
-2. `onnx2axmodel`：使用 Pulsar2 把 ONNX 转换成 MaixCAM2 的 AXModel。
-
-## 文件目录
-
-请把模型和校准图片放到下面的位置：
-
-```text
-model_export/
-  data_need/
-    best.pt
-    calib_images/
-      000001.jpg
-      000002.jpg
-      ...
-    labels.txt          # 可选
-```
-
-必须提供：
-
-- `model_export/data_need/*.pt`：YOLO11 的 `.pt` 模型文件。
-- `model_export/data_need/calib_images`：Pulsar2 量化时使用的校准图片。
-
-可选提供：
-
-- `model_export/data_need/labels.txt`：类别名称文件，每行一个类别。如果没有这个文件，workflow 会使用 `labels` 输入参数。
-
-## Workflow 文件
-
-真正会被 GitHub Actions 执行的是：
-
-```text
-.github/workflows/yolo11_detect_onnx2axmodel.yml
-```
-
-## 如何运行
-
-1. 把仓库推送到 GitHub。
-2. 打开 GitHub 仓库页面。
-3. 进入 `Actions` 页面。
-4. 选择 `YOLO11 Detect ONNX to AXModel`。
-5. 点击 `Run workflow`。
-6. 根据需要填写参数。
-7. 启动 workflow。
-
-## Workflow 参数说明
-
-常用参数：
-
-- `pt_glob`：需要导出的 PT 文件匹配规则，默认是 `model_export/data_need/*.pt`。
-- `calib_images_dir`：校准图片目录，默认是 `model_export/data_need/calib_images`。
-- `model_name`：输出模型基础名称，默认是 `yolo11_detect`。
-- `image_size`：YOLO 导出 ONNX 时的输入尺寸，默认是 `640`。
-- `opset`：ONNX opset 版本，默认是 `17`，和 Sipeed YOLO11 教程保持一致。
-- `calibration_size`：量化时使用的校准图片数量，默认是 `100`。
-- `input_names`：ONNX 输入 tensor 名称，默认是 `images`。
-- `output_names`：YOLO11 检测输出 tensor 名称，用于 ONNX 截取和 Pulsar2 量化配置。
-- `labels`：当不存在 `labels.txt` 时使用的类别名称，多个类别用英文逗号分隔。
-
-Pulsar2 相关参数：
-
-- `pulsar2_image`：包含 `pulsar2`、`onnxsim`、Python 和 ONNX 依赖的 Docker 镜像。
-- `pulsar2_tar_url`：可选参数。如果你的 Pulsar2 镜像是一个 docker save 导出的 `.tar` 或 `.tar.gz` 文件，可以填这个下载地址，workflow 会先下载并执行 `docker load`。
-
-## Pulsar2 Docker 镜像要求
-
-第二个 job 会在 Docker 容器里运行转换命令：
-
-```bash
-docker run --rm --privileged \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  "$PULSAR2_IMAGE" \
-  python model_export/onnx2axmodel.py ...
-```
-
-因此 `pulsar2_image` 指向的镜像里必须能直接使用这些命令：
-
-```bash
-pulsar2
-onnxsim
-python
-```
-
-如果你的 Pulsar2 镜像是私有镜像，需要在 workflow 的 `Prepare Pulsar2 docker image` 步骤之前增加 Docker 登录步骤。
-
-如果你的镜像不能直接 `docker pull`，可以把镜像提前用 `docker save` 导出并上传到一个可下载地址，然后在运行 workflow 时填写 `pulsar2_tar_url`。
-
-## 输出产物
-
-workflow 运行完成后，在 GitHub Actions 运行记录里下载这个 artifact：
-
-```text
-yolo11-axmodel-maixcam2
-```
-
-里面会包含类似下面的文件：
-
-```text
-yolo11_detect_vnpu.axmodel
-yolo11_detect_npu.axmodel
-yolo11_detect.mud
-```
-
-其中：
-
-- `vnpu` 对应 `NPU1`。
-- `npu` 对应 `NPU2`。
-- `.mud` 是 MaixPy 加载模型时需要的模型描述文件。
-
-## 转换流程说明
-
-当前 workflow 按 MaixCAM2 的 Pulsar2 转换流程搭建：
-
-1. 使用 Ultralytics 把 YOLO `.pt` 导出成 ONNX。
-2. 从 ONNX 中截取 YOLO11 检测输出节点。
-3. 使用 `onnxsim` 简化截取后的 ONNX。
-4. 把校准图片打包成 `images.tar`。
-5. 执行 Pulsar2 编译：
-
-```bash
-pulsar2 build \
-  --target_hardware AX620E \
-  --input model.onnx \
-  --output_dir build \
-  --config yolo11_build_config.json
-```
-
-默认使用的 YOLO11 检测输出节点是：
+当前稳定路线是按 Sipeed 教程的 YOLO11 三输出节点方案转换：
 
 ```text
 /model.23/Concat_output_0
@@ -140,59 +10,207 @@ pulsar2 build \
 /model.23/Concat_2_output_0
 ```
 
-如果你导出的 ONNX 中 tensor 名称不同，需要在运行 workflow 时修改 `output_names` 参数。
+注意：需要使用能导出上述节点的 Ultralytics 环境。当前 workflow 固定使用 `ultralytics==8.3.39`、`torch==2.5.1`，避免新版 PyTorch ONNX exporter 改变 graph 结构。
 
-## 本地脚本用法
+## 目录结构
 
-如果你想先在本地测试 `pt -> onnx`，可以运行：
+把模型和校准图片放到：
 
-```bash
-python model_export/pt2onnx.py \
-  --pt-glob "model_export/data_need/*.pt" \
-  --out-dir model_export/build/onnx \
-  --imgsz 640 \
-  --opset 17
+```text
+model_export/
+  data_need/
+    best.pt
+    labels.txt
+    calib_images/
+      000001.jpg
+      000002.jpg
+      ...
 ```
 
-如果你本地已经有 Pulsar2 环境，可以直接运行 ONNX 转 AXModel：
+说明：
+
+- `best.pt`：需要转换的 YOLO11 权重。
+- `labels.txt`：类别名，每行一个。
+- `calib_images/`：Pulsar2 量化校准图片，默认使用 100 张。
+
+## GitHub Actions
+
+workflow 文件：
+
+```text
+.github/workflows/yolo11_detect_onnx2axmodel.yml
+```
+
+手动触发：
+
+1. 打开 GitHub 仓库。
+2. 进入 `Actions`。
+3. 选择 `YOLO11 Detect ONNX to AXModel`。
+4. 点击 `Run workflow`。
+
+常用参数：
+
+```text
+pt_glob           model_export/data_need/best.pt
+image_size        480 640
+opset             17
+input_names       images
+output_names      /model.23/Concat_output_0,/model.23/Concat_1_output_0,/model.23/Concat_2_output_0
+calibration_size  100
+pulsar2_image     pulsar2:6.0
+```
+
+`image_size` 支持一个或两个值：
+
+```text
+640       表示 640x640
+480 640   表示 height=480, width=640
+```
+
+## 固定导出环境
+
+workflow 中 `pt2onnx` job 固定安装关键版本：
 
 ```bash
-python model_export/onnx2axmodel.py \
-  --onnx model_export/build/onnx/best.onnx \
-  --out-dir model_export/build/axmodel \
-  --model-name yolo11_detect \
-  --calib-images model_export/data_need/calib_images \
-  --calib-size 100 \
-  --input-names images \
-  --output-names "/model.23/Concat_output_0,/model.23/Concat_1_output_0,/model.23/Concat_2_output_0" \
-  --labels "class0"
+python -m pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install ultralytics==8.3.39 onnx==1.21.0 onnxslim==0.1.93 onnxruntime==1.23.2 onnxsim numpy==2.2.6 protobuf==7.35.0
 ```
+
+这样做的原因是新版 PyTorch/ONNX exporter 可能会改变 ONNX 节点名，导致教程里的 Concat 节点不存在。
+
+## 转换流程
+
+workflow 分两个 job：
+
+1. `pt2onnx`
+
+   ```text
+   pt -> onnx
+   extract_onnx.py 提取三个 YOLO11 Concat 输出节点
+   onnxsim 简化
+   检查输出 rank 必须是 4
+   上传处理后的 ONNX artifact
+   ```
+
+2. `onnx2axmodel`
+
+   ```text
+   下载 ONNX artifact
+   下载校准图片
+   加载 Pulsar2 6.0 Docker 镜像
+   pulsar2 build 生成 NPU1 / NPU2 模型
+   生成 .mud
+   上传 axmodel artifact
+   ```
+
+输出 artifact：
+
+```text
+yolo11-axmodel-maixcam2
+```
+
+里面包含：
+
+```text
+yolo11_detect_vnpu.axmodel
+yolo11_detect_npu.axmodel
+yolo11_detect.mud
+```
+
+说明：
+
+- `*_vnpu.axmodel`：对应 `NPU1`。
+- `*_npu.axmodel`：对应 `NPU2`。
+- `.mud`：MaixPy 加载模型时使用。
+
+## Pulsar2 镜像
+
+默认使用：
+
+```text
+pulsar2:6.0
+```
+
+workflow 会从 Hugging Face 下载并缓存：
+
+```text
+https://huggingface.co/AXERA-TECH/Pulsar2/resolve/main/6.0/ax_pulsar2_6.0.tar.gz?download=true
+```
+
+第一次运行会比较慢，后续会从 GitHub Actions cache 恢复 tar 包。
+
+## 部署到 MaixCAM2
+
+把 artifact 里的文件放到板子，例如：
+
+```text
+/root/models/train15_2026.5.21/
+  yolo11_detect_vnpu.axmodel
+  yolo11_detect_npu.axmodel
+  yolo11_detect.mud
+```
+
+MaixPy 代码示例：
+
+```python
+from maix import camera, display, image, nn, app
+
+detector = nn.YOLO11(model="/root/models/train15_2026.5.21/yolo11_detect.mud", dual_buff=True)
+cam = camera.Camera(640, 480, image.Format.FMT_RGB888)
+disp = display.Display()
+
+while not app.need_exit():
+    img = cam.read()
+    objs = detector.detect(img, conf_th=0.5, iou_th=0.45)
+    for obj in objs:
+        img.draw_rect(obj.x, obj.y, obj.w, obj.h, image.Color.from_rgb(255, 0, 0), 2)
+        img.draw_string(obj.x, obj.y, f"{detector.labels[obj.class_id]} {obj.score:.2f}", image.Color.from_rgb(255, 0, 0))
+    disp.show(img)
+```
+
+如果 `detector.detect()` 直接退出、没有 Python traceback，优先确认 MaixCAM2 系统镜像是否为较新版本。实际测试中，重新刷 MaixCAM 镜像后 `nn.YOLO11` 可以正常运行。
+
+## 调试脚本
+
+`nn_forward.py` 是手动 `nn.NN` forward 和自定义后处理调试脚本，用来查看 AXModel 输出 shape、验证模型是否能正常 forward。
+
+如果只是正常部署，优先使用内置：
+
+```python
+nn.YOLO11(...)
+```
+
+因为内置后处理速度更高。
 
 ## 常见问题
 
-### Pulsar2 命令找不到
+### 找不到 Concat 输出节点
 
-说明 `pulsar2_image` 指向的 Docker 镜像里没有 `pulsar2`，或者镜像没有正确加载。
+通常是导出环境版本不一致。确认 Action 日志里版本接近：
 
-请确认：
+```text
+torch 2.5.1
+ultralytics 8.3.39
+onnx 1.21.0
+```
 
-- `pulsar2_image` 名称正确。
-- 镜像可以被 `docker pull` 拉取。
-- 或者 `pulsar2_tar_url` 可以正常下载并被 `docker load` 加载。
+如果使用新版 torch，可能会出现教程节点不存在的问题。
 
-### ONNX 截取失败
+### 输出不是 rank4
 
-通常是 `input_names` 或 `output_names` 和实际 ONNX tensor 名称不一致。
+当前教程路线要求提取后的三个输出必须是 rank4。workflow 会在 `inspect_onnx_outputs.py --require-rank 4` 阶段检查，失败时说明 ONNX graph 不符合教程转换格式。
 
-需要检查 ONNX 模型中的输入输出节点名称，然后重新填写 workflow 参数。
+### 模型能 forward，但 `nn.YOLO11` 不能 detect
 
-### 校准图片数量不足
+先确认 `.mud` 中：
 
-如果 `calibration_size` 设置为 `100`，那么 `calib_images` 目录里至少需要 100 张图片。
+```ini
+model_type = yolo11
+type = detector
+```
 
-可以减少 `calibration_size`，或者补充更多校准图片。
+然后确认 MaixCAM2 系统镜像版本。旧镜像可能在 `detector.detect()` 阶段直接退出。
 
-## 备注
+### 不要把 Pulsar2 镜像提交进 Git
 
-- GitHub-hosted runner 默认不包含 Pulsar2。
-- 校准图片应尽量接近模型真实使用场景，否则量化后精度可能下降。
+Pulsar2 镜像 tar 包大于 GitHub 单文件限制。应使用 workflow 的 `pulsar2_tar_url` 下载，或使用 Docker registry / GitHub Actions cache。
